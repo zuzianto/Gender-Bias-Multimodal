@@ -10,7 +10,6 @@ MSP-IMPROV_features_2021/L/
 *.npy
 
 # Model checkpoints and experiment outputs
-results/
 checkpoints/
 IF-MMIN/checkpoints/
 IF-MMIN/results/

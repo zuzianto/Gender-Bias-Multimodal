@@ -15,6 +15,8 @@ pytorch >= 1.0.0
 First you should change the data folder path in ```data/config``` and preprocess your data follwing the code in ```preprocess/```.
 
 You can download the preprocessed feature to run the code.
+https://drive.google.com/drive/folders/18nTA5LpTGqE_pRwhnDWN0o4bo-b0lkGt
+
 
 + For Training IF-MMIN on IEMOCAP:
 

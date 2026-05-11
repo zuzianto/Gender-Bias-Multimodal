@@ -31,9 +31,7 @@ MSP-IMPROV_features_2021/
 
 Features are provided by the IF-MMIN authors alongside the IEMOCAP and MSP-IMPROV datasets:
 
-- **IF-MMIN repo**: https://github.com/ZhuoYulang/IF-MMIN
-- **IEMOCAP**: access request at https://sail.usc.edu/iemocap/
-- **MSP-IMPROV**: access request at https://ecs.utdallas.edu/research/researchlabs/msp-lab/MSP-Improv.html
+https://drive.google.com/drive/folders/18nTA5LpTGqE_pRwhnDWN0o4bo-b0lkGt?usp=drive_link
 
 After obtaining access, download the pre-extracted `.h5` feature files from the authors and place them in the directories above.
 
