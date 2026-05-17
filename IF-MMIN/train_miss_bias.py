@@ -86,11 +86,24 @@ def compute_bias_metrics(preds, labels, genders):
 
     n_classes    = len(EMOTIONS)
     labels_range = list(range(n_classes))
+    zeros        = np.zeros(n_classes)
 
     male_mask   = genders == 'M'
     female_mask = genders == 'F'
     preds_m,  labels_m = preds[male_mask],  labels[male_mask]
     preds_f,  labels_f = preds[female_mask], labels[female_mask]
+
+    # Guard: if either gender group is empty (e.g. a condition happened to
+    # land entirely on one gender in this batch), return zeros and warn.
+    if len(preds_m) == 0 or len(preds_f) == 0:
+        unique, counts = np.unique(genders, return_counts=True)
+        print(f'[bias warning] skipping — one gender group empty. '
+              f'Found genders: {dict(zip(unique, counts))}')
+        return {
+            'f1_m': zeros, 'f1_f': zeros, 'f1_diff': zeros,
+            'sp': zeros, 'sp_abs_mean': 0.0,
+            'eo': zeros, 'eo_abs_mean': 0.0,
+        }
 
     # 1. F1 Score Difference by Gender ----------------------------------------
     f1_m    = f1_score(labels_m, preds_m, average=None,
