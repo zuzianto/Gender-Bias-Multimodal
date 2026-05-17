@@ -261,9 +261,10 @@ def eval(model, val_iter, is_save=False, phase='test', epoch=-1):
 
     if is_save:
         save_dir = model.save_dir
-        np.save(os.path.join(save_dir, f'{phase}_pred.npy'),     total_pred)
+        np.save(os.path.join(save_dir, f'{phase}_pred.npy'),      total_pred)
         np.save(os.path.join(save_dir, f'{phase}_label.npy'),    total_label)
-        np.save(os.path.join(save_dir, f'{phase}_int2name.npy'), total_int2name)  # NEW
+        np.save(os.path.join(save_dir, f'{phase}_int2name.npy'), total_int2name)
+        np.save(os.path.join(save_dir, f'{phase}_miss_type.npy'), total_miss_type)  # needed for cross-fold aggregation
 
         for part_name in ['azz', 'zvz', 'zzl', 'avz', 'azl', 'zvl']:
             part_idx   = np.where(total_miss_type == part_name)
