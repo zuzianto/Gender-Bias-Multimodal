@@ -59,19 +59,21 @@ For each configuration:
 
 ```
 Gender-Bias-Multimodal/
-├── IF-MMIN/                    # Model codebase (Zuo et al., 2022)
-│   ├── data/                   # Dataset loaders and configs
-│   ├── models/                 # Model definitions (IFMMIN, MMIN, MISA, …)
-│   ├── scripts/                # Original training shell scripts
-│   ├── opts/                   # Argument parsing
-│   ├── utils/                  # Logging and helpers
-│   ├── train_baseline.py       # Stage 1 training entry point
-│   └── train_miss.py           # Stage 2 training entry point
-├── scripts/                    # Project-specific training and analysis scripts
-├── data/
-│   ├── IEMOCAP_features_2021/  # Pre-extracted features (not in git — see below)
-│   └── MSP-IMPROV_features_2021/
-├── results/                    # Experiment outputs (not in git)
+├── IF-MMIN/                      # Model codebase (Zuo et al., 2022)
+│   ├── data/                     # Dataset loaders and configs
+│   │   └── config/               # IEMOCAP_config.json — update paths here
+│   ├── models/                   # Model definitions (IFMMIN, MMIN, MISA, …)
+│   ├── scripts/                  # Original training shell scripts
+│   ├── opts/                     # Argument parsing
+│   ├── utils/                    # Logging and helpers
+│   ├── train_baseline.py         # Stage 1 training entry point
+│   ├── train_miss.py             # Stage 2 training entry point (original)
+│   ├── train_miss_bias.py        # Stage 2 + gender-bias evaluation (extended)
+│   └── requirements.txt          # Python dependencies
+├── notebooks/
+│   └── 01_dataset_exploration.ipynb  # Label & gender distribution analysis
+├── IEMOCAP_features_2021/        # Pre-extracted features (not in git — see below)
+├── results/                      # Experiment outputs (not in git)
 └── README.md
 ```
 
@@ -107,28 +109,92 @@ MSP-IMPROV_features_2021/
 git clone https://github.com/zuzianto/Gender-Bias-Multimodal.git
 cd Gender-Bias-Multimodal
 
-# Install dependencies (Python 3.8+)
-pip install torch torchvision numpy pandas scikit-learn matplotlib seaborn h5py
+# Install PyTorch with the right CUDA version for your machine — check with nvidia-smi
+# Example for CUDA 12.1:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# Place pre-extracted features in IEMOCAP_features_2021/ and MSP-IMPROV_features_2021/
-# Update data/config paths in IF-MMIN/data/config/ if needed
+# Install all other dependencies
+pip install -r IF-MMIN/requirements.txt
 ```
+
+Then update `IF-MMIN/data/config/IEMOCAP_config.json` with the paths to your local feature files:
+
+```json
+{
+  "feature_root": "/path/to/IEMOCAP_features_2021",
+  "target_root":  "/path/to/IEMOCAP_features_2021/target"
+}
+```
+
+See [`data/README.md`](data/README.md) for how to obtain the pre-extracted features.
 
 ---
 
 ## Running Experiments
 
-Training scripts are in `IF-MMIN/scripts/`. The main IF-MMIN pipeline for IEMOCAP:
+All training is run from inside the `IF-MMIN/` directory.  
+Arguments: `[num_of_expr]` = experiment index (e.g. `1`), `[GPU_index]` = GPU ID (e.g. `0`; use `-1` for CPU).
+
+### Original pipeline
 
 ```bash
-# Stage 1: CMD baseline (invariant feature learning)
-bash IF-MMIN/scripts/CAP_data_aug.sh
+cd IF-MMIN
 
-# Stage 2: Full IF-MMIN training
-bash IF-MMIN/scripts/CAP_IFMMIN.sh
+# Stage 1 — invariant feature pretraining (runs all 10 folds)
+bash scripts/CAP_utt_shared.sh AVL [num_of_expr] [GPU_index]
+
+# Stage 2 — full IF-MMIN training with standard WA/UAR/F1 evaluation
+bash scripts/CAP_IFMMIN.sh [num_of_expr] [GPU_index]
 ```
 
-Project-specific scripts for balanced training and fairness evaluation will live in `scripts/`.
+> **Note:** Before running Stage 2, fix a bug in `scripts/CAP_IFMMIN.sh`:  
+> change `--consistent_weight=100` → `--invariant_weight=100`.
+
+### Gender-bias evaluation pipeline (extended)
+
+`train_miss_bias.py` is a drop-in replacement for `train_miss.py` that adds:
+
+| Metric | Per condition | Per emotion |
+|---|---|---|
+| F1 difference by gender | ✓ | ✓ |
+| Statistical Parity Difference | ✓ | ✓ |
+| Equality of Opportunity Difference | ✓ | ✓ |
+| Gender Predictability AUROC | ✓ (100-trial logistic regression probe) | — |
+
+Evaluated across all **7 modality conditions**: `{A}`, `{V}`, `{T}`, `{A,V}`, `{A,T}`, `{V,T}`, `{A,V,T}`.
+
+Stage 1 is the same — reuse the checkpoint from above. For Stage 2 with bias metrics, edit `scripts/CAP_IFMMIN.sh` to call `train_miss_bias.py` instead of `train_miss.py`, then run:
+
+```bash
+bash scripts/CAP_IFMMIN.sh [num_of_expr] [GPU_index]
+```
+
+**Outputs per fold** (in `logs/{name}/results/`):
+
+| File | Contents |
+|---|---|
+| `result_total.tsv` … `result_zvl.tsv` | Standard WA / UAR / F1 (unchanged) |
+| `result_avl.tsv` | WA / UAR / F1 for full-modality condition |
+| `bias_{cond}.tsv` | F1 diff / SP / EO per emotion, per condition |
+| `gender_auroc_cv{N}.csv` | AUROC mean / std per modality × condition |
+| `gender_auroc_cv{N}.png` | Violin plot of AUROC distributions |
+
+### Smoke test (single fold)
+
+To verify the pipeline works before a full 10-fold run, edit both shell scripts to replace `seq 1 1 10` with `seq 1 1 1` and set `--niter=1 --niter_decay=1`, then run both stages. Training is complete when the terminal returns to a prompt and you see:
+
+```
+INFO - Tst result acc 0.XXXX uar 0.XXXX f1 0.XXXX
+INFO - === Gender Predictability AUROC (mean ± std, 100 trials) ===
+```
+
+### Dataset exploration notebook
+
+```bash
+jupyter notebook notebooks/01_dataset_exploration.ipynb
+```
+
+Covers label distribution, gender balance, emotion × gender cross-tabulation, and feature statistics across all 10 folds.
 
 ---
 

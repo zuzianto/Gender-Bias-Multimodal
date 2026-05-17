@@ -5,7 +5,7 @@ gpu=$2
 for i in `seq 1 1 10`;
 do
 
-cmd="python train_miss.py --dataset_mode=multimodal_miss --model=IFMMIN
+cmd="python train_miss_bias.py --dataset_mode=multimodal_miss --model=IFMMIN
 --log_dir=./logs --checkpoints_dir=./checkpoints --gpu_ids=$gpu --image_dir=./shared_image
 --A_type=comparE --input_dim_a=130 --norm_method=trn --embd_size_a=128 --embd_method_a=maxpool
 --V_type=denseface --input_dim_v=342 --embd_size_v=128  --embd_method_v=maxpool
