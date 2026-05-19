@@ -10,16 +10,24 @@ This script:
   2. Combines predictions from all folds (covering all speakers / both genders)
   3. Computes F1-diff, Statistical Parity, and Equality of Opportunity
      for each of the 7 modality conditions
-  4. Writes a summary TSV and prints a report
+  4. If embeddings were saved (test_embeddings_miss.npz), also computes
+     Gender Predictability AUROC via logistic regression probes
+  5. Writes summary TSVs and a combined AUROC plot
 
 Usage (run from IF-MMIN/):
-    python compute_bias_summary.py --checkpoint_dir checkpoints/our_IEMOCAP_block_5_run_0_1
+    python compute_bias_summary.py --checkpoint_dir checkpoints/our_IEMOCAP_block_5_run_0_10_unbiased
+
 """
 
 import os
 import argparse
 import numpy as np
-from sklearn.metrics import f1_score, accuracy_score, recall_score
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from sklearn.metrics import f1_score, accuracy_score, recall_score, roc_auc_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedShuffleSplit
 
 EMOTIONS       = ['happy', 'angry', 'sad', 'neutral']
 MISS_CONDS     = ['azz', 'zvz', 'zzl', 'avz', 'azl', 'zvl']
@@ -123,6 +131,148 @@ def load_fold(fold_dir):
         'avl_pred': avl_pred, 'avl_label': avl_label,
         'avl_int2name': avl_int2name,
     }
+
+
+# ─── AUROC helpers ────────────────────────────────────────────────────────────
+
+def _run_auroc_trials(embeddings, genders, n_trials=100, test_size=0.2):
+    """100-trial stratified logistic regression → AUROC for gender prediction."""
+    if len(np.unique(genders)) < 2:
+        return np.full(n_trials, 0.5)
+    sss    = StratifiedShuffleSplit(n_splits=n_trials, test_size=test_size, random_state=0)
+    scores = []
+    for trial_idx, (trn_idx, tst_idx) in enumerate(sss.split(embeddings, genders)):
+        clf = LogisticRegression(max_iter=1000, random_state=trial_idx, C=1.0)
+        clf.fit(embeddings[trn_idx], genders[trn_idx])
+        proba = clf.predict_proba(embeddings[tst_idx])[:, 1]
+        scores.append(roc_auc_score(genders[tst_idx], proba))
+    return np.array(scores)
+
+
+def load_embeddings_fold(fold_dir):
+    """Load saved embeddings for one fold (written by train_miss_bias.py)."""
+    miss_path = os.path.join(fold_dir, 'test_embeddings_miss.npz')
+    avl_path  = os.path.join(fold_dir, 'test_embeddings_avl.npz')
+    if not os.path.exists(miss_path):
+        return None, None
+    miss = np.load(miss_path, allow_pickle=True)
+    avl  = np.load(avl_path,  allow_pickle=True) if os.path.exists(avl_path) else None
+    return miss, avl
+
+
+def compute_auroc_summary(checkpoint_dir, n_folds, out_dir, n_trials=100):
+    """Load per-fold embeddings, combine across folds, compute AUROC."""
+    MODALITIES = ['audio', 'visual', 'text', 'fused']
+
+    # accumulate across folds
+    miss_data = {m: [] for m in MODALITIES}
+    miss_genders, miss_types = [], []
+    avl_data = {m: [] for m in MODALITIES}
+    avl_genders = []
+    emb_folds = 0
+
+    for fold in range(1, n_folds + 1):
+        fold_dir = os.path.join(checkpoint_dir, str(fold))
+        miss, avl = load_embeddings_fold(fold_dir)
+        if miss is None:
+            continue
+        emb_folds += 1
+        for m in MODALITIES:
+            miss_data[m].append(miss[m])
+        miss_genders.append(miss['genders'])
+        miss_types.append(miss['miss_type'])
+        if avl is not None:
+            for m in MODALITIES:
+                avl_data[m].append(avl[m])
+            avl_genders.append(avl['genders'])
+
+    if emb_folds == 0:
+        print('\nNo embedding files found — re-run train_miss_bias.py to generate them.')
+        print('(Files needed: test_embeddings_miss.npz per fold)')
+        return
+
+    print(f'\nLoaded embeddings from {emb_folds} / {n_folds} folds.')
+
+    for m in MODALITIES:
+        miss_data[m] = np.concatenate(miss_data[m])
+    miss_genders = np.concatenate(miss_genders)
+    miss_types   = np.concatenate(miss_types)
+
+    has_avl = len(avl_genders) > 0
+    if has_avl:
+        for m in MODALITIES:
+            avl_data[m] = np.concatenate(avl_data[m])
+        avl_genders = np.concatenate(avl_genders)
+
+    g_unique, g_counts = np.unique(miss_genders, return_counts=True)
+    print(f'Embedding gender distribution: {dict(zip(g_unique.tolist(), g_counts.tolist()))}')
+
+    # compute AUROC per condition × modality
+    auroc_results = {}
+    ALL_CONDS = ['azz', 'zvz', 'zzl', 'avz', 'azl', 'zvl'] + (['avl'] if has_avl else [])
+
+    for cond in ['azz', 'zvz', 'zzl', 'avz', 'azl', 'zvl']:
+        idx = miss_types == cond
+        auroc_results[cond] = {
+            m: _run_auroc_trials(miss_data[m][idx], miss_genders[idx], n_trials)
+            for m in MODALITIES
+        }
+        print(f'  {cond}: fused AUROC = {np.mean(auroc_results[cond]["fused"]):.3f} '
+              f'± {np.std(auroc_results[cond]["fused"]):.3f}')
+
+    if has_avl:
+        auroc_results['avl'] = {
+            m: _run_auroc_trials(avl_data[m], avl_genders, n_trials)
+            for m in MODALITIES
+        }
+        print(f'  avl: fused AUROC = {np.mean(auroc_results["avl"]["fused"]):.3f} '
+              f'± {np.std(auroc_results["avl"]["fused"]):.3f}')
+
+    # print summary table
+    print(f'\n{"Cond":<6}' + ''.join(f'{m:>22}' for m in MODALITIES))
+    for cond in ALL_CONDS:
+        row = f'{cond:<6}'
+        for m in MODALITIES:
+            s = auroc_results[cond][m]
+            row += f'   {np.mean(s):.3f} ± {np.std(s):.3f}       '
+        print(row)
+
+    # save CSV
+    csv_path = os.path.join(out_dir, f'gender_auroc_combined_{emb_folds}folds.csv')
+    with open(csv_path, 'w') as fh:
+        fh.write('condition,modality,auroc_mean,auroc_std,auroc_min,auroc_max\n')
+        for cond in ALL_CONDS:
+            for m in MODALITIES:
+                s = auroc_results[cond][m]
+                fh.write(f'{cond},{m},{np.mean(s):.4f},{np.std(s):.4f},'
+                         f'{np.min(s):.4f},{np.max(s):.4f}\n')
+    print(f'AUROC CSV saved to {csv_path}')
+
+    # violin plot
+    plot_path = os.path.join(out_dir, f'gender_auroc_combined_{emb_folds}folds.png')
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    for ax, mod in zip(axes.flatten(), MODALITIES):
+        data = [auroc_results[cond][mod] for cond in ALL_CONDS]
+        parts = ax.violinplot(data, positions=range(len(ALL_CONDS)),
+                              showmeans=True, showmedians=True)
+        for pc in parts['bodies']:
+            pc.set_facecolor('#4C9BE8')
+            pc.set_alpha(0.7)
+        ax.axhline(y=0.5, color='green', linestyle='--', linewidth=1.5,
+                   label='AUROC = 0.5  (gender-blind)')
+        ax.set_xticks(range(len(ALL_CONDS)))
+        ax.set_xticklabels(ALL_CONDS, fontsize=10)
+        ax.set_ylim(0.3, 1.0)
+        ax.set_ylabel('AUROC', fontsize=11)
+        ax.set_title(f'{mod.capitalize()} embeddings', fontsize=12)
+        ax.legend(fontsize=9)
+        ax.grid(axis='y', alpha=0.3)
+    fig.suptitle(f'Gender Predictability AUROC — {emb_folds} folds combined',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f'AUROC plot saved to {plot_path}')
 
 
 # ─── main ──────────────────────────────────────────────────────────────────────
@@ -248,6 +398,12 @@ def main():
                                for v in vals) + '\n')
 
     print(f'\nSummary saved to {tsv_path}')
+
+    # ── Gender Predictability AUROC (requires embeddings saved by train_miss_bias.py)
+    print('\n' + '='*80)
+    print('GENDER PREDICTABILITY AUROC (combined across all folds)')
+    print('='*80)
+    compute_auroc_summary(args.checkpoint_dir, args.n_folds, out_dir)
 
 
 if __name__ == '__main__':

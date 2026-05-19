@@ -457,6 +457,22 @@ def eval_gender_auroc(model, tst_miss_iter, full_tst_iter,
     full_embs, full_genders, _ = _extract_embeddings(
         model, full_tst_iter, miss_dataset=False)
 
+    # ── save embeddings to disk for cross-fold AUROC aggregation ──────────────
+    # Per-fold AUROC is meaningless (each fold is single-gender in IEMOCAP).
+    # compute_bias_summary.py loads these files, combines all folds, and
+    # computes AUROC on the full gender-balanced set.
+    np.savez_compressed(
+        os.path.join(save_dir, 'test_embeddings_miss.npz'),
+        audio=miss_embs['audio'], visual=miss_embs['visual'],
+        text=miss_embs['text'],   fused=miss_embs['fused'],
+        genders=miss_genders,     miss_type=miss_types)
+    np.savez_compressed(
+        os.path.join(save_dir, 'test_embeddings_avl.npz'),
+        audio=full_embs['audio'], visual=full_embs['visual'],
+        text=full_embs['text'],   fused=full_embs['fused'],
+        genders=full_genders)
+    logger.info(f'Embeddings saved to {save_dir} for cross-fold AUROC aggregation.')
+
     # ── compute AUROC trials per condition × modality ─────────────────────────
     auroc_results = {}
     modality_names = ['audio', 'visual', 'text', 'fused']
