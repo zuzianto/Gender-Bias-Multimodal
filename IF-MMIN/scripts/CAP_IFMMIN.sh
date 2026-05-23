@@ -11,7 +11,7 @@ cmd="python train_miss_bias.py --dataset_mode=multimodal_miss --model=IFMMIN
 --V_type=denseface --input_dim_v=342 --embd_size_v=128  --embd_method_v=maxpool
 --L_type=bert_large --input_dim_l=1024 --embd_size_l=128 
 --AE_layers=256,128,64 --n_blocks=5 --num_thread=4 --corpus=IEMOCAP
---ce_weight=1 --mse_weight=1 --consistent_weight=100
+--ce_weight=1 --mse_weight=1 --invariant_weight=100
 --output_dim=4 --cls_layers=128,128 --dropout_rate=0.5
 --niter=20 --niter_decay=20 --verbose --print_freq=10
 --batch_size=128 --lr=2e-4 --run_idx=$run_idx --weight_decay=1e-5

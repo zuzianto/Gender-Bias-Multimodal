@@ -20,8 +20,8 @@ Install all dependencies:
 nvidia-smi
 
 # 2. Install PyTorch with the matching CUDA version — examples:
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121   # CUDA 12.1
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118   # CUDA 11.8
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132   # CUDA 13.2
+
 
 # 3. Install everything else
 pip install -r requirements.txt
@@ -60,7 +60,7 @@ Pass `[num_of_expr]` as an experiment index (e.g. `1`) and `[GPU_index]` as the 
 **Stage 1 — invariant feature pretraining**
 
 ```bash
-bash scripts/CAP_utt_shared.sh AVL [num_of_expr] [GPU_index]
+bash scripts/CAP_utt_shared.sh AVL 10 0
 ```
 
 This trains the CMD-based specificity + invariance encoders on all three modalities (A, V, L) and saves checkpoints to `checkpoints/CAP_utt_shared_AVL_run{num_of_expr}/`.
@@ -68,7 +68,7 @@ This trains the CMD-based specificity + invariance encoders on all three modalit
 **Stage 2 — full IF-MMIN training**
 
 ```bash
-bash scripts/CAP_IFMMIN.sh [num_of_expr] [GPU_index]
+bash scripts/CAP_IFMMIN.sh 10 0
 ```
 
 > **Known bug in the original script:** `CAP_IFMMIN.sh` passes `--consistent_weight=100` which is not a recognised argument. Change this to `--invariant_weight=100` before running.
@@ -108,7 +108,7 @@ Replace `train_miss.py` with `train_miss_bias.py` in the shell scripts, or run d
 **Stage 1** is identical — run it once and reuse the checkpoint:
 
 ```bash
-bash scripts/CAP_utt_shared.sh AVL [num_of_expr] [GPU_index]
+
 ```
 
 **Stage 2 with bias metrics:**

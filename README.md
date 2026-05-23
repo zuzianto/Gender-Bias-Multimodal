@@ -111,7 +111,7 @@ cd Gender-Bias-Multimodal
 
 # Install PyTorch with the right CUDA version for your machine — check with nvidia-smi
 # Example for CUDA 12.1:
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 
 # Install all other dependencies
 pip install -r IF-MMIN/requirements.txt
