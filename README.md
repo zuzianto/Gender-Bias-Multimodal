@@ -51,31 +51,8 @@ For each configuration:
 - **F1 gap** — F1-score difference between male and female speakers
 - **Statistical Parity Difference (SPD)** — difference in the probability of predicting each emotion across genders
 - **Equality of Opportunity Difference (EoOD)** — whether the model is equally accurate for both genders conditioned on the true label
-- **Gender probing AUROC** — logistic regression probe on learned representations measuring how linearly decodable gender is
 
 ---
-
-## Repository Structure
-
-```
-Gender-Bias-Multimodal/
-├── IF-MMIN/                      # Model codebase (Zuo et al., 2022)
-│   ├── data/                     # Dataset loaders and configs
-│   │   └── config/               # IEMOCAP_config.json — update paths here
-│   ├── models/                   # Model definitions (IFMMIN, MMIN, MISA, …)
-│   ├── scripts/                  # Original training shell scripts
-│   ├── opts/                     # Argument parsing
-│   ├── utils/                    # Logging and helpers
-│   ├── train_baseline.py         # Stage 1 training entry point
-│   ├── train_miss.py             # Stage 2 training entry point (original)
-│   ├── train_miss_bias.py        # Stage 2 + gender-bias evaluation (extended)
-│   └── requirements.txt          # Python dependencies
-├── notebooks/
-│   └── 01_dataset_exploration.ipynb  # Label & gender distribution analysis
-├── IEMOCAP_features_2021/        # Pre-extracted features (not in git — see below)
-├── results/                      # Experiment outputs (not in git)
-└── README.md
-```
 
 > **Note:** Large feature files (`.h5`) are excluded from version control. See [`data/README.md`](data/README.md) for instructions on obtaining them.
 
@@ -110,7 +87,7 @@ git clone https://github.com/zuzianto/Gender-Bias-Multimodal.git
 cd Gender-Bias-Multimodal
 
 # Install PyTorch with the right CUDA version for your machine — check with nvidia-smi
-# Example for CUDA 12.1:
+# Example for CUDA 13.2:
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 
 # Install all other dependencies
@@ -135,20 +112,6 @@ See [`data/README.md`](data/README.md) for how to obtain the pre-extracted featu
 All training is run from inside the `IF-MMIN/` directory.  
 Arguments: `[num_of_expr]` = experiment index (e.g. `1`), `[GPU_index]` = GPU ID (e.g. `0`; use `-1` for CPU).
 
-### Original pipeline
-
-```bash
-cd IF-MMIN
-
-# Stage 1 — invariant feature pretraining (runs all 10 folds)
-bash scripts/CAP_utt_shared.sh AVL [num_of_expr] [GPU_index]
-
-# Stage 2 — full IF-MMIN training with standard WA/UAR/F1 evaluation
-bash scripts/CAP_IFMMIN.sh [num_of_expr] [GPU_index]
-```
-
-> **Note:** Before running Stage 2, fix a bug in `scripts/CAP_IFMMIN.sh`:  
-> change `--consistent_weight=100` → `--invariant_weight=100`.
 
 ### Gender-bias evaluation pipeline (extended)
 
@@ -163,7 +126,7 @@ bash scripts/CAP_IFMMIN.sh [num_of_expr] [GPU_index]
 
 Evaluated across all **7 modality conditions**: `{A}`, `{V}`, `{T}`, `{A,V}`, `{A,T}`, `{V,T}`, `{A,V,T}`.
 
-Stage 1 is the same — reuse the checkpoint from above. For Stage 2 with bias metrics, edit `scripts/CAP_IFMMIN.sh` to call `train_miss_bias.py` instead of `train_miss.py`, then run:
+Stage 1 is the same — reuse the checkpoint from IF-MMIN. 
 
 ```bash
 bash scripts/CAP_IFMMIN.sh [num_of_expr] [GPU_index]
@@ -197,11 +160,6 @@ jupyter notebook notebooks/01_dataset_exploration.ipynb
 Covers label distribution, gender balance, emotion × gender cross-tabulation, and feature statistics across all 10 folds.
 
 ---
-
-## References
-
-- Zuo, H., Li, R., Liu, Z., Wu, Z., Meng, H., & Cai, L. (2022). *Exploiting modality-invariant feature for robust multimodal emotion recognition with missing modalities*. ICASSP 2022. [[Paper]](https://arxiv.org/abs/2210.15359) [[Code]](https://github.com/ZhuoYulang/IF-MMIN)
-- Busso, C. et al. (2008). *IEMOCAP: Interactive emotional dyadic motion capture database*. Language Resources and Evaluation.
 
 ---
 
