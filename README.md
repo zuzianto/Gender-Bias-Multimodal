@@ -6,9 +6,8 @@ Investigating gender bias in **IF-MMIN** (Zuo et al., 2022), a multimodal emotio
 
 ## Research Questions
 
-- Does training on a gender-balanced dataset reduce gender-correlated disparities in emotion recognition performance?
-- Do fairness gaps persist even when only a subset of modalities is available at inference time?
-- Are gender-correlated patterns encoded in the model's learned representations?
+- How training data affect gender bias in IF-MMIN emotion recognition model?
+- Which modalities or combination of modalities introduce the biggest gender bias in emotion recognition in this model?
 
 ---
 
@@ -34,7 +33,7 @@ Investigating gender bias in **IF-MMIN** (Zuo et al., 2022), a multimodal emotio
 | **Natural** | Original IEMOCAP label distribution |
 | **Balanced** | Resampled so each emotion label is equally distributed across male and female speakers |
 
-Both conditions use 5-fold cross-validation, 40 epochs per fold, batch size 128.
+Both conditions use 10-fold cross-validation, 40 epochs per fold, batch size 128.
 
 ### Evaluation
 
@@ -122,7 +121,6 @@ Arguments: `[num_of_expr]` = experiment index (e.g. `1`), `[GPU_index]` = GPU ID
 | F1 difference by gender | ✓ | ✓ |
 | Statistical Parity Difference | ✓ | ✓ |
 | Equality of Opportunity Difference | ✓ | ✓ |
-| Gender Predictability AUROC | ✓ (100-trial logistic regression probe) | — |
 
 Evaluated across all **7 modality conditions**: `{A}`, `{V}`, `{T}`, `{A,V}`, `{A,T}`, `{V,T}`, `{A,V,T}`.
 
